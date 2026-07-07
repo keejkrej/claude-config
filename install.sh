@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Apply Claude Code configuration from this repo.
-# Sets up the global CLAUDE.md guidance and registers the Codex plugin
-# (marketplace + enablement) so Claude can delegate to Codex subagents.
+# Links the global CLAUDE.md guidance and bootstraps the Codex plugin so
+# Claude can delegate implementation/validation to Codex subagents.
 set -euo pipefail
 
 CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
@@ -18,35 +18,15 @@ fi
 ln -sf "$HERE/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
 echo "    linked CLAUDE.md"
 
-# 2. Codex plugin: register the openai-codex marketplace and enable the plugin
-if ! command -v node >/dev/null 2>&1; then
-  echo "    ! node not found; skipping settings.json merge." >&2
-  echo "    ! Manually add 'extraKnownMarketplaces.openai-codex' and 'enabledPlugins.codex@openai-codex' to $CLAUDE_DIR/settings.json" >&2
-else
-  CLAUDE_DIR="$CLAUDE_DIR" HERE="$HERE" node -e '
-    const fs = require("fs");
-    const path = require("path");
-    const file = path.join(process.env.CLAUDE_DIR, "settings.json");
-    let cfg = {};
-    if (fs.existsSync(file)) {
-      try { cfg = JSON.parse(fs.readFileSync(file, "utf8")); } catch {}
-    }
-    const repo = JSON.parse(fs.readFileSync(path.join(process.env.HERE, "settings.json"), "utf8"));
-    // Plugin marketplace + enablement: repo is the source of truth.
-    cfg.extraKnownMarketplaces = Object.assign({}, cfg.extraKnownMarketplaces || {}, repo.extraKnownMarketplaces || {});
-    cfg.enabledPlugins = Object.assign({}, cfg.enabledPlugins || {}, repo.enabledPlugins || {});
-    // Fill any other repo-defined keys missing locally.
-    for (const k of Object.keys(repo)) {
-      if (k === "extraKnownMarketplaces" || k === "enabledPlugins") continue;
-      if (!(k in cfg)) cfg[k] = repo[k];
-    }
-    fs.writeFileSync(file, JSON.stringify(cfg, null, 2) + "\n");
-    console.log("    merged settings.json: openai-codex marketplace + codex plugin enabled");
-  '
-fi
-
+# 2. Codex plugin — configured inside Claude Code via /plugin, not settings.json.
+#    Claude Code keeps plugin state in ~/.claude/plugins/ (known_marketplaces.json
+#    and installed_plugins.json). A shell script can't run slash commands, so
+#    install.sh links CLAUDE.md and prints the /plugin steps to run in-session.
 echo
-echo "==> Done. Next steps:"
-echo "    1. Restart Claude Code so the marketplace and plugin load."
-echo "    2. Run  /codex:setup  to verify the Codex CLI (install it if needed)."
-echo "    3. Confirm delegation works with  /codex:status."
+echo "==> Codex plugin setup (run these inside Claude Code):"
+echo "    /plugin marketplace add openai/codex-plugin-cc"
+echo "    /plugin install codex@openai-codex"
+echo "    /codex:setup        # verify the Codex CLI, install it if needed"
+echo "    /codex:status       # confirm delegation works"
+echo
+echo "==> Done. CLAUDE.md is linked; finish the plugin setup in Claude Code."
