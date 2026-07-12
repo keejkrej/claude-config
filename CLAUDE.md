@@ -1,14 +1,29 @@
 # Global guidance
 
-**The pipeline for substantial work:** route with `ask-matt` when unsure → (if foggy/huge) `wayfinder` clears decisions ticket-by-ticket → a subagent grills Claude (~5 rounds) when the idea fits one session → `to-spec` writes a local spec → `to-tickets` writes local tracer-bullet tickets with blocking edges → dispatch each frontier ticket to Codex → an **independent Codex subagent** validates → Claude arbitrates and integrates. Claude the main thread orchestrates throughout; subagents run the skills, the building, and the validating. **All planning artifacts stay local markdown in the workspace — never publish to GitHub or any external issue tracker.**
+## Two orchestration modes
 
-## Division of labor: Claude orchestrates, Codex executes
+There are only two setups. **This file governs Mode A.**
 
-Default operating model for substantial coding work: **Claude Opus is the orchestrator and validator; Codex sub-agents do the bulk implementation.**
+| | Orchestrator (plans, judges, integrates) | Execution layer |
+|--|--|--|
+| **Mode A** (this file — Claude Code) | Claude model, main thread | Codex subagents (implement + adversarial review) |
+| **Mode B** (`codex-config` / `AGENTS.md` — Codex CLI) | Codex model, main thread | Codex subagents (`explorer`, `worker`, `reviewer`) |
 
-Codex agents are fast and strong at focused, well-specified code generation. Opus is stronger at planning, decomposition, cross-file reasoning, and judgment. Play to both.
+The planning pipeline, matt-skills flow, and `.scratch/` artifacts are **the same** in both modes. What changes is who holds the orchestrator seat and how dispatch works: here, Claude subagents run skills (grill, wayfinder, to-spec, to-tickets) and Codex subagents build; in Mode B, Codex subagents cover the whole stack.
 
-**Claude's job (keep this in the main thread):**
+Pick one mode per session. Don't mix orchestrators on the same effort — both can read the same committed `.scratch/<effort-slug>/`, but only one model should own the main thread.
+
+**The pipeline for substantial work (both modes):** route with `ask-matt` when unsure → (if foggy/huge) `wayfinder` clears decisions ticket-by-ticket → a subagent grills the orchestrator (~5 rounds) when the idea fits one session → `to-spec` writes a local spec → `to-tickets` writes local tracer-bullet tickets with blocking edges → dispatch each frontier ticket to Codex workers → an **independent Codex reviewer** validates → the orchestrator arbitrates and integrates. **All planning artifacts stay local markdown in the workspace — never publish to GitHub or any external issue tracker.**
+
+**In Mode A:** Claude is the orchestrator throughout. Claude subagents run the skills; Codex subagents implement and review.
+
+## Division of labor: Claude orchestrates, Codex executes (Mode A)
+
+Default operating model for substantial coding work: **the Claude model is the orchestrator and validator; Codex subagents do the bulk implementation and adversarial review.**
+
+Codex is fast and strong at focused, well-specified code generation. Claude is stronger at planning, decomposition, cross-file reasoning, and judgment. Play to both.
+
+**The orchestrator's job (keep this in the main thread):**
 - Understand the request; explore the codebase enough to scope the work.
 - **Route with `ask-matt`** when the right skill or flow isn't obvious.
 - **Choose the on-ramp:** foggy effort too big for one session → delegate `wayfinder`; a sharpenable idea that fits one session → delegate grilling first. If grilling surfaces no fog, skip wayfinder.
@@ -24,12 +39,12 @@ Codex agents are fast and strong at focused, well-specified code generation. Opu
 - Work can be parallelized into independent chunks — especially frontier tickets from `to-tickets` with no remaining blockers.
 - A second implementation or diagnosis pass would help, or the main thread is stuck.
 
-**Keep in Claude (don't delegate) when:**
+**Keep in the orchestrator main thread (don't delegate) when:**
 - The work is primarily architecture, ambiguous requirements, or trade-off decisions.
 - It needs whole-repo context and judgment more than raw code volume.
 - It's a quick edit where handoff overhead exceeds the benefit.
 
-**Non-negotiable:** Claude is the last line of defense. Fast is only useful if it's correct — treat Codex output as a draft to verify, not a finished answer. If validation fails, tighten the spec and re-dispatch rather than hand-fixing silently.
+**Non-negotiable:** The orchestrator is the last line of defense. Fast is only useful if it's correct — treat Codex output as a draft to verify, not a finished answer. If validation fails, tighten the spec and re-dispatch rather than hand-fixing silently.
 
 ## Local planning artifacts
 
@@ -87,9 +102,9 @@ For ideas you can hold in one session (or after wayfinder clears the fog):
 - Bugs → `/diagnosing-bugs` on-ramp, not the main flow.
 - Incoming raw issues → `/triage` only when the human explicitly wants external tracker hygiene — not part of the default orchestrator pipeline, and never for tickets that `to-tickets` already wrote locally.
 
-### Invert the interview — the subagent grills Claude
+### Invert the interview — the subagent grills the orchestrator
 
-These skills are written as interviews of a human supervisor. So don't run grilling on yourself. Instead, **spawn a subagent that runs the skill and interviews you (Claude, the orchestrator).** You play the human role — the supervisor these skills were designed to extract a plan from.
+These skills are written as interviews of a human supervisor. So don't run grilling on yourself. Instead, **spawn a subagent that runs the skill and interviews you (the orchestrator).** In Mode A that's Claude on the main thread playing the human role — the supervisor these skills were designed to extract a plan from.
 
 - Kick off planning by dispatching a subagent to run **`grilling`** (via `grill-with-docs`, `grill-me`, or a wayfinder grilling ticket) with instructions to interview *you*, the orchestrator, not a human.
 - **Facts vs. decisions** (v1.1 grilling): the interviewing subagent looks up *facts* itself (codebase exploration, docs). *Decisions* are yours — it puts each one to you and waits. It must not answer its own decision questions, and it must not enact the plan until you confirm shared understanding.
@@ -99,4 +114,4 @@ These skills are written as interviews of a human supervisor. So don't run grill
 
 **Keep it short — ~5 rounds, not 100.** The interview is a forcing function, not an endurance test. Aim for about **five** question-and-answer rounds — enough to surface the real assumptions and trade-offs, then stop. Tell the interviewing subagent to prioritize the highest-leverage unknowns and converge fast; if the plan is clear sooner, end sooner. Diminishing returns set in quickly, and over-grilling burns time and tokens for little gain.
 
-**The one exception — human-triggered runs stay interactive.** If I invoke one of these skills manually (e.g. I type `/grill-with-docs` or `/wayfinder`), the human being interviewed is **me** — run it as designed and grill me directly. Don't substitute yourself for me when I've explicitly asked to be in the loop. Subagent-grills-Claude is for when *you* start the flow; skill-grills-me is for when *I* do.
+**The one exception — human-triggered runs stay interactive.** If I invoke one of these skills manually (e.g. I type `/grill-with-docs` or `/wayfinder`), the human being interviewed is **me** — run it as designed and grill me directly. Don't substitute yourself for me when I've explicitly asked to be in the loop. Subagent-grills-orchestrator is for when *you* start the flow; skill-grills-me is for when *I* do.
