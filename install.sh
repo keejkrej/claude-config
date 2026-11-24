@@ -1,64 +1,70 @@
 #!/usr/bin/env bash
 # Apply Claude Code configuration from this repo.
-# Links the global CLAUDE.md guidance and bootstraps the Codex plugin so
-# Claude can delegate implementation/validation to Codex subagents.
+# Copies the global CLAUDE.md guidance and the reviewer agent into ~/.claude, and
+# registers the MCP servers from mcp.json through the Claude Code CLI so that
+# ~/.claude.json stays owned by Claude Code.
 set -euo pipefail
 
 CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
-AGENTS_SKILLS_DIR="${AGENTS_SKILLS_DIR:-$HOME/.agents/skills}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-link_path() {
+copy_file() {
   local src="$1" dest="$2"
   mkdir -p "$(dirname "$dest")"
 
-  if [ ! -e "$src" ]; then
+  if [ ! -f "$src" ]; then
     echo "!! source missing: $src" >&2
     exit 1
   fi
-
-  if [ -L "$dest" ]; then
-    local current
-    current="$(readlink "$dest")"
-    if [ "$current" = "$src" ]; then
-      echo "    already linked $(basename "$dest")"
-      return
-    fi
-    rm -f "$dest"
-  elif [ -e "$dest" ]; then
+  if [ -f "$dest" ] && cmp -s "$src" "$dest"; then
+    echo "    unchanged $(basename "$dest")"
+    return
+  fi
+  if [ -e "$dest" ]; then
     mv "$dest" "$dest.bak.$(date +%s)"
     echo "    backed up existing $(basename "$dest")"
   fi
-
-  ln -s "$src" "$dest"
-  echo "    linked $(basename "$dest")"
+  cp "$src" "$dest"
+  echo "    copied $(basename "$dest")"
 }
 
 echo "==> Applying Claude config from $HERE -> $CLAUDE_DIR"
 mkdir -p "$CLAUDE_DIR"
 
-# 1. Global guidance: symlink CLAUDE.md into ~/.claude
-link_path "$HERE/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+# 1. Global guidance
+copy_file "$HERE/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
 
-# 2. Shared agent skills: symlink ~/.claude/skills -> ~/.agents/skills
-if [ ! -d "$AGENTS_SKILLS_DIR" ]; then
-  mkdir -p "$AGENTS_SKILLS_DIR"
-  echo "    created $AGENTS_SKILLS_DIR"
+# 2. Reviewer agent
+for agent_file in "$HERE"/agents/*.md; do
+  [ -e "$agent_file" ] || continue
+  copy_file "$agent_file" "$CLAUDE_DIR/agents/$(basename "$agent_file")"
+done
+
+# 3. MCP servers: registered through the Claude Code CLI (it owns ~/.claude.json).
+if command -v claude >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+  node -e '
+    const servers = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).mcpServers;
+    for (const [name, config] of Object.entries(servers)) console.log(name + "\t" + JSON.stringify(config));
+  ' "$HERE/mcp.json" | while IFS=$'\t' read -r name json; do
+    if claude mcp get "$name" >/dev/null 2>&1; then
+      echo "    mcp already registered: $name"
+    else
+      claude mcp add-json --scope user "$name" "$json" >/dev/null
+      echo "    mcp registered: $name"
+    fi
+  done
+else
+  echo "!! claude CLI or node not found; register the servers from $HERE/mcp.json by hand:" >&2
+  echo "   claude mcp add-json --scope user <name> '<json>'" >&2
 fi
-link_path "$AGENTS_SKILLS_DIR" "$CLAUDE_DIR/skills"
 
-# 3. Codex plugin — configured inside Claude Code via /plugin, not settings.json.
-#    Claude Code keeps plugin state in ~/.claude/plugins/ (known_marketplaces.json
-#    and installed_plugins.json). A shell script can't run slash commands, so
-#    install.sh links config and prints the /plugin steps to run in-session.
 echo
-echo "==> Codex plugin setup (run these inside Claude Code):"
-echo "    /plugin marketplace add openai/codex-plugin-cc"
-echo "    /plugin install codex@openai-codex"
-echo "    /codex:setup        # verify the Codex CLI, install it if needed"
-echo "    /codex:status       # confirm delegation works"
+echo "==> Done. Installed:"
+echo "    $CLAUDE_DIR/CLAUDE.md       <- $HERE/CLAUDE.md"
+echo "    $CLAUDE_DIR/agents/*.md     <- $HERE/agents/*.md"
+echo "    MCP servers (user scope)     from $HERE/mcp.json"
 echo
-echo "==> Done. Linked:"
-echo "    ~/.claude/CLAUDE.md   -> $HERE/CLAUDE.md"
-echo "    ~/.claude/skills      -> $AGENTS_SKILLS_DIR"
-echo "    Finish the plugin setup in Claude Code."
+echo "==> Notes:"
+echo "    mobbin runs through mcp-remote: the first time an agent starts it, a browser opens"
+echo "    for the Mobbin login; the token is then shared by every agent via ~/.mcp-auth."
+echo "    Nothing is linked: re-run this script after editing files here."

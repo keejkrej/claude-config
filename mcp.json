@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "paper": {
+      "type": "stdio",
+      "command": "paper",
+      "args": ["mcp"]
+    },
+    "ambient": {
+      "type": "http",
+      "url": "http://127.0.0.1:8765/mcp"
+    },
+    "mobbin": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://api.mobbin.com/mcp"]
+    },
+    "browse": {
+      "type": "stdio",
+      "command": "browse",
+      "args": ["mcp"]
+    }
+  }
+}
