@@ -6,8 +6,10 @@ Portable config for [Claude Code](https://code.claude.com), copied into `~/.clau
 
 | File | Purpose | Installed as |
 | --- | --- | --- |
-| `CLAUDE.md` | Global instructions for every session: the Ambient memory block plus a short "review before done" rule | `~/.claude/CLAUDE.md` |
+| `CLAUDE.md` | Global instructions for every session: the Ambient memory block plus a primary plan/delegate flow | `~/.claude/CLAUDE.md` |
 | `mcp.json` | MCP servers: paper (local `paper mcp`), ambient (local HTTP), mobbin (through `mcp-remote`, which owns the OAuth login), browse (local `browse mcp`) | registered at user scope via `claude mcp add-json` |
+| `agents/worker.md` | `worker` subagent: implements changes and runs commands/tests | `~/.claude/agents/worker.md` |
+| `agents/scout.md` | `scout` subagent: read-only research | `~/.claude/agents/scout.md` |
 | `agents/reviewer.md` | `reviewer` subagent: an independent, read-only code reviewer with the same brief as the other agents' reviewers | `~/.claude/agents/reviewer.md` |
 
 Nothing is linked. `install.sh` (Git Bash, macOS, Linux) and `install.ps1` (PowerShell) copy the
@@ -35,6 +37,23 @@ do this); npm's own `npx.cmd` cannot be spawned without a shell, and the documen
 `cmd /c npx -y mcp-remote …`.
 
 Check everything with `claude mcp list`.
+
+## Plan and delegate
+
+`CLAUDE.md` keeps the primary conversation focused on planning, delegation, and verification.
+The primary may read/search but delegates file changes and shell commands to `worker`,
+read-only research to `scout`, and non-trivial diff review to `reviewer`. Workers implement
+and run checks directly; the primary-only restrictions do not apply to delegated subagents.
+
+The new roles use the reviewer's native Markdown/frontmatter format and inherit the session
+model. `worker` inherits the session's available tools and permissions; `scout` lists the same
+read/inspection tools as `reviewer`, but its prompt limits Bash to read-only inspection (no
+tests, builds, formatters, or writes). These are prompt rules, not sandbox enforcement.
+No permissions, hooks, providers, or legacy orchestration pipeline are added.
+
+To apply only prompt/role updates without registering MCP servers, copy `CLAUDE.md` and
+`agents/*.md` to the matching paths under `~/.claude/`, backing up differing destination
+files first. Leave other local files and settings untouched.
 
 ## Reviewer
 
