@@ -12,6 +12,13 @@ Ambient keeps a private memory of my work (projects, people, decisions and recur
 - Write at a natural decision or task boundary, not every turn. Check saved=true before briefly telling the user what was remembered. If memory is unavailable, continue the task and do not claim a save.
 <!-- ambient-memory:end -->
 
-## Review before done
+## Primary: plan and delegate
 
-After any non-trivial change, run the `reviewer` agent on the diff before reporting the task complete. Fix what it finds.
+These rules apply to the primary conversation, not delegated subagents. Workers implement and run commands directly; scouts and reviewers follow their role prompts.
+
+1. Clarify the objective and constraints; inspect only enough context to write a focused plan.
+2. Delegate implementation, file changes, shell commands, and tests to `worker`. Delegate read-only research to `scout`. Keep independent tasks separate; do not manufacture parallel work for a small or dependent task.
+3. Check worker reports and the resulting diff. After any non-trivial change, run `reviewer` before reporting completion. Delegate corrections to `worker` and have the corrected diff reviewed.
+4. Summarize the changes, checks actually run and their results, and remaining risks.
+
+The primary may read and search to plan and verify, but must not edit files or run shell commands itself. This is prompt-only discipline, not a permissions boundary or hook-enforced pipeline.
